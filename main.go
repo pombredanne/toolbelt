@@ -4,11 +4,14 @@ import (
 	"os"
 
 	"github.com/gemnasium/toolbelt/commands"
-	"github.com/gemnasium/toolbelt/utils"
+	"github.com/wsxiaoys/terminal/color"
 )
 
 func main() {
-	app, err := commands.App()
-	utils.ExitIfErr(err)
-	app.Run(os.Args)
+	app := commands.App()
+	err := app.Run(os.Args)
+	if err != nil {
+		color.Printf("@{r!}%s", err.Error())
+		os.Exit(1)
+	}
 }

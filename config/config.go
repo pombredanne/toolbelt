@@ -10,15 +10,16 @@ import (
 )
 
 var (
-	APIEndpoint = DEFAULT_API_ENDPOINT
-	APIKey,
-	ProjectSlug string
+	APIEndpoint   = DEFAULT_API_ENDPOINT
+	APIKey       string
+	APIVersion   int = 1
+	ProjectSlug  string
 	IgnoredPaths []string
 	RawFormat    bool
 )
 
 const (
-	VERSION          = "0.2.5"
+	VERSION          = "1.0.3"
 	CONFIG_FILE_PATH = ".gemnasium.yml"
 
 	// Don't forget to update DisplayEnvVars func bellow when updating vars

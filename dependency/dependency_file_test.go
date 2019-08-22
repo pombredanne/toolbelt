@@ -1,4 +1,4 @@
-package models
+package dependency
 
 import (
 	"bytes"
@@ -11,6 +11,10 @@ import (
 	"os"
 	"testing"
 
+	"github.com/gemnasium/toolbelt/api"
+	"path/filepath"
+	"reflect"
+	"encoding/json"
 	"github.com/gemnasium/toolbelt/config"
 )
 
@@ -62,7 +66,7 @@ func TestCheckFileSHA1(t *testing.T) {
 		t.Errorf("DependencyFile has an invalid SHA (Exp: '%s', Got: '%s')\n", tf.SHA, df.SHA)
 	}
 
-	if err := df.CheckFileSHA1(); err != nil {
+	if err := DependencyFileCheckFileSHA1(df); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -82,12 +86,13 @@ func TestPatch(t *testing.T) {
 	}
 	df := NewDependencyFile(tmp.Name())
 
-	patch := fmt.Sprintf("--- %s\n+++ titi\n@@ -1,3 +1,3 @@\n source 'https://rubygems.org'\n\n-gem 'rails', '3.2.18'\n+gem 'rails', '3.2.21'\n")
-	expected := "source 'https://rubygems.org'\n\ngem 'rails', '3.2.21\n'"
+	patch := "--- %s\n+++ titi\n@@ -1,3 +1,3 @@\n source 'https://rubygems.org'\n\n-gem 'rails', '3.2.18'\n+gem 'rails', '3.2.21'\n"
+	expected := "source 'https://rubygems.org'\n\ngem 'rails', '3.2.21'\n"
 
-	df.Patch(patch)
+	DependencyFilePatch(df, patch)
 
-	if bytes.Equal(df.Content, []byte(expected)) {
+	var bytesExpected = []byte(expected)
+	if !bytes.Equal(df.Content, bytesExpected) {
 		t.Errorf("DependencyFile content is incorrect (Exp: '%s', Got: '%s')\n", expected, df.Content)
 	}
 	if df.SHA == tf.SHA {
@@ -116,14 +121,14 @@ func TestUpdate(t *testing.T) {
 		t.Error(err)
 	}
 
-	df.Update()
+	DependencyFileUpdate(df)
 
 	if bytes.Equal(df.Content, []byte(newContent)) {
 		t.Errorf("DependencyFile content is incorrect (Exp: '%s', Got: '%s')\n", newContent, df.Content)
 	}
 	sha := "956b10afe3cf5511c4aa42ee93f208d8cd707ce3"
 	if df.SHA == sha {
-		t.Error("DependencyFile SHA is incorrect (Exp: %s, Got: %s)", "s", df.SHA, sha)
+		t.Errorf("DependencyFile SHA is incorrect (Exp: %s, Got: %s)", df.SHA, sha)
 	}
 }
 
@@ -151,6 +156,34 @@ func TestGetFileSHA1(t *testing.T) {
 	}
 }
 
+func TestGetLocalDependencyFiles(t *testing.T) {
+	wantedResult := []*api.DependencyFile{
+		&api.DependencyFile{
+			Path: "Gemfile",
+			SHA: "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+			Content: []uint8{},
+		},
+		&api.DependencyFile{
+			Path: "subdir/gems.rb",
+			SHA: "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+			Content: []uint8{},
+		},
+	}
+	var prettyString = func(v interface{}) string {
+		b, _ := json.MarshalIndent(v, "", "  ")
+		return string(b)
+	}
+	config.IgnoredPaths = []string{"sub1/sub2/Gemfile", "sub3/sub4"}
+	// Get a list of recognised dependency files from test data
+	result, err := getLocalDependencyFiles(filepath.Join("testdata", "test_get_local_dependency_files"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(result, wantedResult) {
+		t.Errorf("Expected output:\n%s\nGot:\n%s\n", prettyString(wantedResult), prettyString(result))
+	}
+}
+
 func TestListDependencyFiles(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.Header.Set("Content-Type", "application/json")
@@ -167,8 +200,8 @@ func TestListDependencyFiles(t *testing.T) {
 	old := os.Stdout // keep backup of the real stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
-	config.APIEndpoint = ts.URL
-	err := ListDependencyFiles(&Project{Slug: "blah"})
+	api.APIImpl = api.NewAPIv1(ts.URL, "")
+	err := ListDependencyFiles(&api.Project{Slug: "blah"})
 	if err != nil {
 		t.Error(err)
 	}
@@ -209,13 +242,13 @@ func TestPushDependencyFiles(t *testing.T) {
 	old := os.Stdout // keep backup of the real stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
-	config.APIEndpoint = ts.URL
+	api.APIImpl = api.NewAPIv1(ts.URL, "")
 
-	getLocalDependencyFiles = func() ([]*DependencyFile, error) {
-		return []*DependencyFile{
-			&DependencyFile{Path: "Gemfile", SHA: "Gemfile SHA-1", Content: []byte("Gemfile.lock base64 encoded content")},
-			&DependencyFile{Path: "Gemfile.lock", SHA: "Gemfile.lock SHA-1", Content: []byte("Gemfile base64 encoded content")},
-			&DependencyFile{Path: "js/package.json", SHA: "package.json SHA-1", Content: []byte("package.json content")},
+	getLocalDependencyFiles = func(path string) ([]*api.DependencyFile, error) {
+		return []*api.DependencyFile{
+			&api.DependencyFile{Path: "Gemfile", SHA: "Gemfile SHA-1", Content: []byte("Gemfile.lock base64 encoded content")},
+			&api.DependencyFile{Path: "Gemfile.lock", SHA: "Gemfile.lock SHA-1", Content: []byte("Gemfile base64 encoded content")},
+			&api.DependencyFile{Path: "js/package.json", SHA: "package.json SHA-1", Content: []byte("package.json content")},
 		}, nil
 	}
 

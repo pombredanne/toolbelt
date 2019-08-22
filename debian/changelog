@@ -1,3 +1,83 @@
+gemnasium-toolbelt (1.0.3.1) stable; urgency=low
+
+  * Ignores node_modules and .bundle directories when searching for
+    dependency files.
+  * GEMNASIUM_IGNORED_PATHS filters path in addition to filenames.
+
+ -- Gemnasium <info@gemnasium.com>  Thu, 11 Jan 2018 14:26:11 +0200
+
+gemnasium-toolbelt (1.0.2.1) stable; urgency=low
+
+  * Uses Gemnasium depfile library.
+
+ -- Gemnasium <info@gemnasium.com>  Mon, 18 Dec 2017 19:01:42 +0200
+
+gemnasium-toolbelt (1.0.1.1) stable; urgency=low
+
+  * Adds compatibility with Gemnasium API version 2.
+
+ -- Gemnasium <info@gemnasium.com>  Mon, 18 Dec 2017 13:56:13 +0200
+
+gemnasium-toolbelt (0.2.10.2) stable; urgency=low
+
+  * Signs packages with SHA512 instead of the obsolete SHA1
+
+ -- Gemnasium <info@gemnasium.com>  Mon, 09 Oct 2017 15:18:10 +0200
+
+gemnasium-toolbelt (0.2.10.1) stable; urgency=medium
+
+  * Fixes toolbelt version
+
+ -- Gemnasium <info@gemnasium.com>  Tue, 26 Sep 2017 17:14:16 +0200
+
+gemnasium-toolbelt (0.2.10) stable; urgency=medium
+
+  * Better error messages when project creation fails
+
+ -- Gemnasium <info@gemnasium.com>  Tue, 26 Sep 2017 16:53:21 +0200
+
+gemnasium-toolbelt (0.2.9.1) stable; urgency=low
+
+  * Fix debian packages
+  * Code cleaning
+
+ -- Gemnasium <info@gemnasium.com>  Thu, 20 Jan 2017 16:19:32 +0100
+
+gemnasium-toolbelt (0.2.8-1) stable; urgency=low
+
+  * Add a Dockerfile, to build `gemnasium/toolbelt` image
+  * Remove deprecation warnings when running commands
+
+ -- Gemnasium <info@gemnasium.com>  Thu, 12 Jul 2016 12:12:31 +0100
+
+gemnasium-toolbelt (0.2.8-1) stable; urgency=low
+
+  * Add a Dockerfile, to build `gemnasium/toolbelt` image
+  * Remove deprecation warnings when running commands
+
+ -- Gemnasium <info@gemnasium.com>  Thu, 7 Jul 2016 09:11:35 +0100
+
+gemnasium-toolbelt (0.2.7-1) stable; urgency=low
+
+  * remove hardcoded max duration for autoupdate
+
+ -- Gemnasium <info@gemnasium.com>  Thu, 4 Feb 2016 15:13:02 +0100
+
+gemnasium-toolbelt (0.2.6-1) stable; urgency=low
+
+  * Added go 1.4.1 to test matrix
+  * "liveeval" command now returns 1 if runtime status is red
+  * Better error logging: error message from API is now displayed
+  * Autoupdate command is now split into `run` and `apply`. The command `gemnasium autoupdate` is now `gemnasium autoupdate run`. `apply` will fetch the best set of dependencies from gemnasium (after `run` returned a success).
+
+ -- Gemnasium <info@gemnasium.com>  Thu, 12 Feb 2015 11:36:18 +0100
+
+gemnasium-toolbelt (0.2.5-2) stable; urgency=low
+
+  * Allows for i386 packages.
+
+ -- Gemnasium <info@gemnasium.com>  Fri, 10 Oct 2014 15:38:25 +0200
+
 gemnasium-toolbelt (0.2.5-1) stable; urgency=low
 
   * Fix dependency files push (gemnasium df push)

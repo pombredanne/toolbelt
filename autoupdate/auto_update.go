@@ -15,44 +15,69 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gemnasium/toolbelt/config"
-	"github.com/gemnasium/toolbelt/gemnasium"
-	"github.com/gemnasium/toolbelt/models"
 	"github.com/gemnasium/toolbelt/utils"
+	"github.com/gemnasium/toolbelt/api"
+	"github.com/gemnasium/toolbelt/config"
+	"github.com/gemnasium/toolbelt/project"
 )
 
 const (
-	AUTOUPDATE_MAX_DURATION = 3600
-	UPDATE_SET_INVALID      = "invalid"
-	UPDATE_SET_SUCCESS      = "test_passed"
-	UPDATE_SET_FAIL         = "test_failed"
+	UPDATE_SET_INVALID = "invalid"
+	UPDATE_SET_SUCCESS = "test_passed"
+	UPDATE_SET_FAIL    = "test_failed"
 )
 
-type RequirementUpdate struct {
-	File  models.DependencyFile `json:"file"`
-	Patch string                `json:"patch"`
-}
 
-type VersionUpdate struct {
-	Package       models.Package
-	OldVersion    string `json:"old_version"`
-	TargetVersion string `json:"target_version"`
-}
-
-type UpdateSet struct {
-	ID                 int                            `json:"id"`
-	RequirementUpdates map[string][]RequirementUpdate `json:"requirement_updates"`
-	VersionUpdates     map[string][]VersionUpdate     `json:"version_updates"`
-}
-
-type UpdateSetResult struct {
-	UpdateSetID     int                     `json:"-"`
-	ProjectSlug     string                  `json:"-"`
-	State           string                  `json:"state"`
-	DependencyFiles []models.DependencyFile `json:"dependency_files"`
-}
 
 var ErrProjectRevisionEmpty error = fmt.Errorf("The current revision (%s) is unknown on Gemnasium, please push your dependency files before running autoupdate.\nSee `gemnasium df help push`.\n", utils.GetCurrentRevision())
+
+// Apply the best dependency files that have been found so far
+func Apply(projectSlug string, testSuite []string) error {
+	err := checkProject(projectSlug)
+	if err != nil {
+		return err
+	}
+
+	dfiles, err := fetchDependencyFiles(projectSlug)
+	if err != nil {
+		return err
+	}
+
+	err = updateDepFiles(dfiles)
+	if err != nil {
+		fmt.Printf("Error while restoring files: %s\n", err)
+		return err
+	}
+	// No need to try the update, it will fail
+
+	return nil
+}
+
+// Fetch the best dependency files that have been found so far
+func fetchDependencyFiles(projectSlug string) (dfiles []api.DependencyFile, err error) {
+	revision, err := getRevision()
+	if err != nil {
+		return nil, err
+	}
+
+	dfiles, err = api.APIImpl.AutoUpdateStepsBest(projectSlug, revision)
+	return dfiles, err
+}
+
+// Update dependency files with given one (best dependency files)
+// REFACTOR: this is very similar to restoreDepFiles
+func updateDepFiles(dfiles []api.DependencyFile) error {
+	fmt.Printf("%d file(s) to be updated.\n", len(dfiles))
+	for _, df := range dfiles {
+		fmt.Printf("Updating file %s: ", df.Path)
+		err := ioutil.WriteFile(df.Path, df.Content, 0644)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("done\n")
+	}
+	return nil
+}
 
 // Download and loop over update sets, apply changes, run test suite, and finally notify gemnasium
 func Run(projectSlug string, testSuite []string) error {
@@ -68,7 +93,6 @@ func Run(projectSlug string, testSuite []string) error {
 		return errors.New("Arg [testSuite] can't be empty")
 	}
 
-	fmt.Printf("Executing test script: ")
 	out, err := executeTestSuite(testSuite)
 	if err != nil {
 		fmt.Println("Aborting, initial test suite run is failing:")
@@ -76,14 +100,8 @@ func Run(projectSlug string, testSuite []string) error {
 		return err
 	}
 
-	// We'll be checking loop duration on each iteration
-	startTime := time.Now()
 	// Loop until tests are green
 	for {
-		if time.Since(startTime).Seconds() > AUTOUPDATE_MAX_DURATION {
-			fmt.Println("Max loop duration reached, aborting.")
-			break
-		}
 		updateSet, err := fetchUpdateSet(projectSlug)
 		if err != nil {
 			return err
@@ -97,7 +115,7 @@ func Run(projectSlug string, testSuite []string) error {
 		// We have an updateSet, let's patch files and run tests
 		// We need to keep a list of updated files to restore them after this run
 		orgDepFiles, uptDepFiles, err := applyUpdateSet(updateSet)
-		resultSet := &UpdateSetResult{UpdateSetID: updateSet.ID, ProjectSlug: projectSlug, DependencyFiles: uptDepFiles}
+		resultSet := &api.UpdateSetResult{UpdateSetID: updateSet.ID, ProjectSlug: projectSlug, DependencyFiles: uptDepFiles}
 		if err == cantInstallRequirements || err == cantUpdateVersions {
 			resultSet.State = UPDATE_SET_INVALID
 			err := pushUpdateSetResult(resultSet)
@@ -148,30 +166,20 @@ func Run(projectSlug string, testSuite []string) error {
 	return nil
 }
 
-func fetchUpdateSet(projectSlug string) (*UpdateSet, error) {
-	revision := utils.GetCurrentRevision()
-	if revision == "" {
-		return nil, errors.New("Can't determine current revision, please use REVISION env var to specify it")
-	}
-	var updateSet *UpdateSet
-	opts := &gemnasium.APIRequestOptions{
-		Method: "POST",
-		URI:    fmt.Sprintf("/projects/%s/branches/%s/update_sets/next", projectSlug, utils.GetCurrentBranch()),
-		Body:   &map[string]string{"revision": revision},
-		Result: &updateSet,
-	}
-	err := gemnasium.APIRequest(opts)
+func fetchUpdateSet(projectSlug string) (updateSet *api.UpdateSet, err error) {
+	revision, err := getRevision()
 	if err != nil {
 		return nil, err
 	}
 
-	return updateSet, nil
+	updateSet, err = api.APIImpl.AutoUpdateStepsNext(projectSlug, revision)
+	return updateSet, err
 }
 
 // Patch files if needed, and update packages
 // Will return a slice of original files and a slice of the updated files, with
 // their content
-func applyUpdateSet(updateSet *UpdateSet) (orgDepFiles, uptDepFiles []models.DependencyFile, err error) {
+func applyUpdateSet(updateSet *api.UpdateSet) (orgDepFiles, uptDepFiles []api.DependencyFile, err error) {
 	for packageType, reqUpdates := range updateSet.RequirementUpdates {
 		installer, err := NewRequirementsInstaller(packageType)
 		if err != nil {
@@ -201,19 +209,19 @@ func applyUpdateSet(updateSet *UpdateSet) (orgDepFiles, uptDepFiles []models.Dep
 
 // Once update set has been tested, we must send the result to Gemnasium,
 // in order to update statitics.
-func pushUpdateSetResult(rs *UpdateSetResult) error {
+func pushUpdateSetResult(rs *api.UpdateSetResult) error {
 	fmt.Printf("Pushing result (status='%s'): ", rs.State)
 
 	if rs.UpdateSetID == 0 || rs.State == "" {
 		return errors.New("Missing updateSet ID and/or State args")
 	}
 
-	opts := &gemnasium.APIRequestOptions{
-		Method: "PATCH",
-		URI:    fmt.Sprintf("/projects/%s/branches/%s/update_sets/%d", rs.ProjectSlug, utils.GetCurrentBranch(), rs.UpdateSetID),
-		Body:   rs,
+	revision, err := getRevision()
+	if err != nil {
+		return err
 	}
-	err := gemnasium.APIRequest(opts)
+
+	err = api.APIImpl.AutoUpdateStepsPush(revision, rs)
 	if err != nil {
 		return err
 	}
@@ -224,7 +232,7 @@ func pushUpdateSetResult(rs *UpdateSetResult) error {
 
 // Restore original files.
 // Needed after each run
-func restoreDepFiles(dfiles []models.DependencyFile) error {
+func restoreDepFiles(dfiles []api.DependencyFile) error {
 	fmt.Printf("%d file(s) to be restored.\n", len(dfiles))
 	for _, df := range dfiles {
 		fmt.Printf("Restoring file %s: ", df.Path)
@@ -246,7 +254,7 @@ func executeTestSuite(ts []string) ([]byte, error) {
 	defer close(done)
 	var out []byte
 	var err error
-	fmt.Printf("Executing test script")
+	fmt.Printf("Executing test script: ")
 	start := time.Now()
 	go func() {
 		result, err := exec.Command(ts[0], ts[1:]...).Output()
@@ -272,8 +280,8 @@ func executeTestSuite(ts []string) ([]byte, error) {
 }
 
 func checkProject(slug string) error {
-	p := &models.Project{Slug: slug}
-	err := p.Fetch()
+	p := &api.Project{Slug: slug}
+	err := project.ProjectFetch(p)
 	if err != nil {
 		return err
 	}
@@ -281,4 +289,12 @@ func checkProject(slug string) error {
 		return ErrProjectRevisionEmpty
 	}
 	return nil
+}
+
+func getRevision() (string, error) {
+	revision := utils.GetCurrentRevision()
+	if revision == "" {
+		return revision, errors.New("Can't determine current revision, please use REVISION env var to specify it")
+	}
+	return revision, nil
 }

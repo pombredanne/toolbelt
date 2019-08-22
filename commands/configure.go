@@ -3,23 +3,28 @@ package commands
 import (
 	"os"
 
-	"github.com/codegangsta/cli"
-	"github.com/gemnasium/toolbelt/models"
-	"github.com/gemnasium/toolbelt/utils"
+	"github.com/urfave/cli"
+	"github.com/gemnasium/toolbelt/api"
+	"github.com/gemnasium/toolbelt/project"
 )
 
-var confFunc = func(project *models.Project) error {
+var confFunc = func(p *api.Project) error {
 	f, err := os.Create(".gemnasium.yml")
-	utils.ExitIfErr(err)
+	if err != nil {
+		return err
+	}
 	defer f.Close()
-	return project.Configure(project.Slug, os.Stdin, f)
+	err = project.ProjectConfigure(p, p.Slug, os.Stdin, f)
+	return err
 }
 
-func Configure(ctx *cli.Context) {
+func Configure(ctx *cli.Context) error {
 	slug := ctx.Args().First()
-	project, err := models.GetProject(slug)
-	utils.ExitIfErr(err)
+	p, err := project.GetProject(slug)
+	if err != nil {
+		return err
+	}
 
-	err = confFunc(project)
-	utils.ExitIfErr(err)
+	err = confFunc(p)
+	return err
 }

@@ -1,21 +1,48 @@
 package commands
 
 import (
-	"github.com/codegangsta/cli"
 	"github.com/gemnasium/toolbelt/auth"
 	"github.com/gemnasium/toolbelt/autoupdate"
-	"github.com/gemnasium/toolbelt/models"
-	"github.com/gemnasium/toolbelt/utils"
+	"github.com/urfave/cli"
+	"github.com/gemnasium/toolbelt/api"
+	"errors"
+	"github.com/gemnasium/toolbelt/project"
 )
 
-var auFunc = func(projectSlug string, args []string) error {
+var auRunFunc = func(projectSlug string, args []string) error {
 	return autoupdate.Run(projectSlug, args)
 }
 
-func AutoUpdate(ctx *cli.Context) {
-	auth.AttemptLogin(ctx)
-	project, err := models.GetProject(ctx.String("project"))
-	utils.ExitIfErr(err)
-	err = auFunc(project.Slug, ctx.Args())
-	utils.ExitIfErr(err)
+var auApplyFunc = func(projectSlug string, args []string) error {
+	return autoupdate.Apply(projectSlug, args)
+}
+
+func AutoUpdateRun(ctx *cli.Context) error {
+	// Auto update is not available on API v2
+	switch api.APIImpl.(type) {
+	case *api.V2ToV1:
+		return errors.New("Auto update is not available on API version 2.")
+	}
+	auth.ConfigureAPIToken(ctx)
+	p, err := project.GetProject(ctx.String("project"))
+	if err != nil {
+		return err
+	}
+	err = auRunFunc(p.Slug, ctx.Args())
+	return err
+}
+
+func AutoUpdateApply(ctx *cli.Context) error {
+	// Auto update is not available on API v2
+	switch api.APIImpl.(type) {
+	case *api.V2ToV1:
+		return errors.New("Auto update is not available on API version 2.")
+	}
+	auth.ConfigureAPIToken(ctx)
+	p, err := project.GetProject(ctx.String("project"))
+	if err != nil {
+		return err
+	}
+	err = auApplyFunc(p.Slug, ctx.Args())
+	return err
 }

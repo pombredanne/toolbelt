@@ -20,7 +20,7 @@ And then
 
 #### Configure Gemnasium repository
 
-    sudo sh -c 'echo "deb http://apt.gemnasium.com stable main" > /etc/apt/sources.list.d/gemnasium.list'
+    sudo sh -c 'echo "deb https://apt.gemnasium.com stable main" > /etc/apt/sources.list.d/gemnasium.list'
     
 #### Trust Gemnasium GPG key
 
@@ -54,7 +54,8 @@ Gemnasium Toolbelt stores your Gemnasium API key into your .netrc file.
 
 To be logged in to Gemnasium, you need to run `gemnasium auth login` and enter your Gemnasium credentials.
 
-Alternatively, you can pass directly your API token to all commands with the option `--token` or the env var ```GEMNASIUM_TOKEN```.
+Alternatively, you can pass directly your API token to all commands with the option `--token` or the env var ```GEMNASIUM_TOKEN```
+or use the `gemnasium auth with-api-token` command to remember it.
 Your API token is available in your settings page (https://gemnasium.com/settings).
 
 ### Create a new project
@@ -72,7 +73,15 @@ If your project is already on Gemnasium, you need to `cd` into your project dire
 You will need your project's Slug (available in your project page settings).
 A sample configuration file is available here: https://github.com/gemnasium/toolbelt/blob/master/config/gemnasium.yml.example 
 
-### Live Evaluation
+### Push dependency files
+
+For projects not automatically synced with Github or Gitlab, you may want to push your files directly to Gemnasium.
+The corresponding project will updated soon after the files have been received. To push your files
+
+    gemnasium dependency_files push -f=Gemfile,Gemfile.lock
+
+
+### Live Evaluation (Available soon for Gemnasium enterprise)
 
 If you want to evaluate your project without pushing files or pulling info from Gemnasium, you may use the ```eval``` command:
 
@@ -80,9 +89,9 @@ If you want to evaluate your project without pushing files or pulling info from 
 
 The command will exit with a code 1 if the project global status is "red".
 
-(Needs a paid plan)
+**A Gold subscription is required to use Live Evaluation.**
 
-### Auto Update
+### Auto Update (Available soon for Gemnasium enterprise)
 
 Auto-Update will fetch update sets from Gemnasium and run your test suite against them.
 The test suite can be passed as arguments, or through the env var GEMNASIUM_TESTSUITE.
@@ -110,7 +119,7 @@ Currently, only Ruby projects are supported. Follow us to get the latest updates
 The configuration can be saved in ```.gemnasium.yml``` files in the project directory.
 Options set in ```.gemnasium.yml``` are overriden by env vars:
 
-
+ * **GEMNASIUM_API_ENDPOINT**: override the API URL. For Gemnasium enterprise, please use https://gemnasium.my.domain/api/v2
  * **GEMNASIUM_PROJECT_SLUG**: override -project flag and project_slug in .gemnasium.yml.
  * **GEMNASIUM_TESTSUITE**: will be run for each iteration over update sets. This is typically your test suite script.
  * **GEMNASIUM_BUNDLE_INSTALL_CMD**: [Ruby Only] during each iteration, the new bundle will be installed. Default: "bundle install"
